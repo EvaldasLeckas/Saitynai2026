@@ -1,0 +1,14 @@
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net9.0\Saitynai.exe
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net9.0\Saitynai.deps.json
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net9.0\Saitynai.runtimeconfig.json
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net9.0\Saitynai.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net9.0\Saitynai.pdb
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.AssemblyInfoInputs.cache
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.AssemblyInfo.cs
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.csproj.CoreCompileInputs.cache
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\refint\Saitynai.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.pdb
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.genruntimeconfig.cache
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\ref\Saitynai.dll
