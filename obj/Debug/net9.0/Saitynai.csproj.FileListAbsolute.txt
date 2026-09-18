@@ -7,6 +7,7 @@ C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.GeneratedMSBu
 C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.AssemblyInfoInputs.cache
 C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.AssemblyInfo.cs
 C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.csproj.CoreCompileInputs.cache
+C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.sourcelink.json
 C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.dll
 C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\refint\Saitynai.dll
 C:\Users\evald\Desktop\Saitynai\Saitynai\obj\Debug\net9.0\Saitynai.pdb
