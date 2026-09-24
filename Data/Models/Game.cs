@@ -20,6 +20,7 @@ public class Game
     public required int PlayerCount {get; set; }
     public required GameLenght GameLenght { get; set; }
     public required Difficulty Difficulty {get; set; }
+    public long SessionId { get; set; }
 
     public Session Session {get; set; }
 
