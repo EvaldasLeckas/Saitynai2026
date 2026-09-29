@@ -9,8 +9,7 @@ public class Session
     public required string City {get; set; }
     public required string Adress {get; set; }
     public string? Description {get; set;}
-    
     public long UserId { get; set; }
-
     public User User { get; set;}
 }
+

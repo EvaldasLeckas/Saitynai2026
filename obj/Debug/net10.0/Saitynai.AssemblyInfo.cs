@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Saitynai")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7854fd5098738da77c71e014d192c6043a6cc8ef")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0d0e90510853118b45bb2220d06c32ce1f03c305")]
 [assembly: System.Reflection.AssemblyProductAttribute("Saitynai")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Saitynai")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -11,3 +11,11 @@ public class UserResultDto
 
     public required long UserId { get; set; }
 }
+public class CreateUserResultDto
+{
+    public required float Score { get; set; }
+    public int Placement {get; set; }
+    public long GameId { get; set; }
+
+    public required long UserId { get; set; }
+}

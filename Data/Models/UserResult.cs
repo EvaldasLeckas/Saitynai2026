@@ -6,7 +6,7 @@ public class UserResult
     public required float Score { get; set; }
     public int Placement {get; set; }
     public long GameId { get; set; }
-
     public Game Game {get; set; }
-
+    public long UserId { get; set; }
+    public User User { get; set; }
 }

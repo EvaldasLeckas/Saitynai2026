@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Saitynai.Models;
 using Saitynai.DTO;
+using System.Text.Json;
+
 
 [ApiController]
 [Route("api/[controller]")]
@@ -14,19 +16,37 @@ public class SessionController : ControllerBase
         _context = context;
     }
 
-    // GET: api/sessions
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Session>>> Getsessions()
-    {
-        var sessions = await _context.Sessions.ToListAsync();
 
-        return Ok(sessions
-);
+    // GET: api/sessions
+    [HttpGet(Name = "GetSessions")]
+    public async Task<ActionResult<IEnumerable<SessionDto>>> GetSessions([FromQuery]PageParameters pageParameters, LinkGenerator linkGenerator)
+    {
+        var sessions = _context.Sessions
+    .Select(u => new SessionDto
+    {
+        Id = u.Id,
+        StartDate = u.StartDate,
+        EndDate = u.EndDate,
+        PlayerCount = u.PlayerCount,
+        City = u.City,
+        Adress = u.Adress,
+        Description = u.Description,
+        UserId = u.UserId
+    })
+    .OrderBy(u => u.StartDate);
+
+        var pagedSessions = await PagedList<SessionDto>.CreateAsync(sessions, pageParameters.PageNumber!.Value, pageParameters.PageSize!.Value);
+
+        var paginationMetadata = pagedSessions.CreatePaginationMetadata(linkGenerator, HttpContext, "GetSessions");
+
+        HttpContext.Response.Headers.Append("Pagination", JsonSerializer.Serialize(paginationMetadata));
+
+        return Ok(pagedSessions);
     }
 
     // GET: api/sessions/5
     [HttpGet("{id:long}")]
-    public async Task<ActionResult<Session>> Getsession(long id)
+    public async Task<ActionResult<SessionDto>> GetSession(long id)
     {
         var session = await _context.Sessions.FindAsync(id);
 
@@ -40,7 +60,7 @@ public class SessionController : ControllerBase
 
     // POST: api/session
     [HttpPost]
-    public async Task<ActionResult<Session>> AddSession(CreateSessionDto dto)
+    public async Task<ActionResult<SessionDto>> AddSession(CreateSessionDto dto)
     {
         var user = await _context.Users.FindAsync(dto.UserId);
 
@@ -68,7 +88,7 @@ public class SessionController : ControllerBase
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(
-            nameof(Getsession),
+            nameof(GetSession),
             new { id = session.Id },
             session
         );
@@ -84,7 +104,7 @@ public class SessionController : ControllerBase
         {
             return NotFound();
         }
-        var user = await _context.Users.FindAsync(dto.UserId);
+        var user = await _context.Sessions.FindAsync(dto.UserId);
 
         if (user == null)
         {

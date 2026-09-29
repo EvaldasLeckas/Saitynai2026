@@ -17,7 +17,7 @@ public class AppDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseNpgsql(_configuration.GetConnectionString(("PostgreSQL")));
+        optionsBuilder.UseNpgsql(_configuration.GetConnectionString("PostgreSQL"));
     }
 
 

@@ -4,6 +4,17 @@ namespace Saitynai.DTO;
 
 public class GameDto
 {
+    public required long Id {get; set;}
+    public required string Name {get; set; }
+    public required string Description {get; set; }
+    public required int PlayerCount {get; set; }
+    public required GameLenght GameLenght { get; set; }
+    public required Difficulty Difficulty {get; set; }
+
+    public required long SessionId { get; set; }
+}
+public class CreateGameDto
+{
     public required string Name {get; set; }
     public required string Description {get; set; }
     public required int PlayerCount {get; set; }
