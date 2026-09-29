@@ -1,4 +1,8 @@
-﻿var builder = WebApplication.CreateBuilder(args);
+﻿using FluentValidation;
+using Saitynai.DTO;
+using SharpGrip.FluentValidation.AutoValidation.Endpoints.Extensions;
+
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>();
 
@@ -7,6 +11,15 @@ builder.Services.AddDbContext<AppDbContext>();
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+//builder.Services.AddFluentValidationAutoValidation();
+//builder.Services.AddValidatorsFromAssemblyContaining<CreateSessionDto.CreateSessionDtoValidator>();
+// builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+// builder.Services.AddFluentValidationAutoValidation(configuration =>
+// {
+//     //configuration.OverrideDefaultResultFactoryWith<ProblemDetailsResultFactory>();
+
+//});
 
 var app = builder.Build();
 

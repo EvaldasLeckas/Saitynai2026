@@ -179,3 +179,8 @@ C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\runtimes\osx-x64\nati
 C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\runtimes\win-arm64\native\msalruntime_arm64.dll
 C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\runtimes\win-x64\native\msalruntime.dll
 C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\runtimes\win-x86\native\msalruntime_x86.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\FluentValidation.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\FluentValidation.AspNetCore.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\FluentValidation.DependencyInjectionExtensions.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\SharpGrip.FluentValidation.AutoValidation.Endpoints.dll
+C:\Users\evald\Desktop\Saitynai\Saitynai\bin\Debug\net10.0\SharpGrip.FluentValidation.AutoValidation.Shared.dll

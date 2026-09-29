@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Saitynai.DTO;
 using Saitynai.Models;
+using System.Text.Json;
+
 
 [ApiController]
 [Route("api/[controller]")]
@@ -15,17 +17,34 @@ public class GameController : ControllerBase
     }
 
     // GET: api/games
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Game>>> GetGames()
+    [HttpGet(Name = "GetGames")]
+    public async Task<ActionResult<IEnumerable<GameDto>>> GetSessions([FromQuery]PageParameters pageParameters, LinkGenerator linkGenerator)
     {
-        var games = await _context.Games.ToListAsync();
+        var games = _context.Games
+    .Select(u => new GameDto
+    {
+        Id = u.Id,
+        Name = u.Name,
+        PlayerCount = u.PlayerCount,
+        Difficulty = u.Difficulty,
+        GameLenght = u.GameLenght,
+        Description = u.Description,
+        SessionId = u.SessionId
+    })
+    .OrderBy(u => u.Name);
 
-        return Ok(games);
+        var pagedSessions = await PagedList<GameDto>.CreateAsync(games, pageParameters.PageNumber!.Value, pageParameters.PageSize!.Value);
+
+        var paginationMetadata = pagedSessions.CreatePaginationMetadata(linkGenerator, HttpContext, "GetSessions");
+
+        HttpContext.Response.Headers.Append("Pagination", JsonSerializer.Serialize(paginationMetadata));
+
+        return Ok(pagedSessions);
     }
 
     // GET: api/Games/5
     [HttpGet("{id:long}")]
-    public async Task<ActionResult<Game>> GetGame(long id)
+    public async Task<ActionResult<GameDto>> GetGame(long id)
     {
         var game = await _context.Games.FindAsync(id);
 
@@ -39,7 +58,7 @@ public class GameController : ControllerBase
 
     // POST: api/Games
     [HttpPost]
-    public async Task<ActionResult<Game>> AddGame(GameDto dto)
+    public async Task<ActionResult<GameDto>> AddGame(CreateGameDto dto)
     {
         var session = await _context.Sessions.FindAsync(dto.SessionId);
 
@@ -73,7 +92,7 @@ public class GameController : ControllerBase
 
     // PUT: api/Games/5
     [HttpPut("{id:long}")]
-    public async Task<IActionResult> UpdateGame(long id, GameDto dto)
+    public async Task<IActionResult> UpdateGame(long id, CreateGameDto dto)
     {
 
         var existingGame = await _context.Games.FindAsync(id);
