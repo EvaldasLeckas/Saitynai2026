@@ -21,3 +21,12 @@ public class CreateSessionDto
     public string? Description { get; set; }
     public required long UserId { get; set; }
 }
+
+public class SessionFilterParameters
+{
+    public string? City { get; set; }
+    public int? MinPlayers { get; set; }
+    public int? MaxPlayers { get; set; }
+    public DateTime? StartDateFrom { get; set; }
+    public DateTime? StartDateTo { get; set; }
+}

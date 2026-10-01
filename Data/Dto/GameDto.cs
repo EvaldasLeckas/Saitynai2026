@@ -23,3 +23,13 @@ public class CreateGameDto
 
     public required long SessionId { get; set; }
 }
+
+public class GameFilterParameters
+{
+    public string? Name { get; set; }
+    public int? MinPlayers { get; set; }
+    public int? MaxPlayers { get; set; }
+
+    public GameLenght? GameLenght { get; set; }
+    public Difficulty? Difficulty { get; set; }
+}
