@@ -19,9 +19,24 @@ public class UserResultController : ControllerBase
     [HttpGet(Name = "GetUserResults")]
     public async Task<ActionResult<IEnumerable<UserResultDto>>> GetUserResults(
         [FromQuery] PageParameters pageParameters,
+        [FromQuery] UserResultFilterParameters filter,
         LinkGenerator linkGenerator)
     {
-        var userResults = _context.UserResults
+        var userResults = _context.UserResults.AsQueryable();
+
+        if (filter.MinScore.HasValue)
+        {
+            userResults = userResults.Where(s =>
+            s.Score >= filter.MinScore.Value);
+        }
+
+        if (filter.MaxScore.HasValue)
+        {
+            userResults = userResults.Where(s =>
+            s.Score <= filter.MaxScore.Value);
+        }
+
+        var userResultDtos = _context.UserResults
             .Select(u => new UserResultDto
             {
                 Id = u.Id,
@@ -33,9 +48,36 @@ public class UserResultController : ControllerBase
             .OrderBy(u => u.Score);
 
         var pagedUserResults = await PagedList<UserResultDto>.CreateAsync(
-            userResults,
+            userResultDtos,
             pageParameters.PageNumber!.Value,
             pageParameters.PageSize!.Value);
+
+        var resources = pagedUserResults.Select(userResult =>
+        {
+            var links = CreateLinksForSingleUserResult(
+                userResult.Id,
+                linkGenerator,
+                HttpContext
+            ).ToArray();
+
+            return new ResourceDto<UserResultDto>(
+                userResult,
+                links);
+        }).ToList();
+
+        var links = CreateLinksForUserResults(
+            linkGenerator,
+            HttpContext,
+            pagedUserResults.GetPreviousPageLink(
+                linkGenerator,
+                HttpContext,
+                "GetUserResults"),
+            pagedUserResults.GetNextPageLink(
+                linkGenerator,
+                HttpContext,
+                "GetUserResults")
+        ).ToArray();
+        
 
         var paginationMetadata = pagedUserResults.CreatePaginationMetadata(
             linkGenerator,
@@ -46,11 +88,15 @@ public class UserResultController : ControllerBase
             "Pagination",
             JsonSerializer.Serialize(paginationMetadata));
 
-        return Ok(pagedUserResults);
+        return Ok(new
+        {
+            resources,
+            links
+        });
     }
 
     // GET: api/UserResult/5
-    [HttpGet("{id:long}")]
+    [HttpGet("{id:long}", Name = "GetUserResult")]
     public async Task<ActionResult<UserResultDto>> GetUserResult(long id)
     {
         var userResult = await _context.UserResults
@@ -74,7 +120,7 @@ public class UserResultController : ControllerBase
     }
 
     // POST: api/UserResult
-    [HttpPost]
+    [HttpPost(Name = "CreateUserResult")]
     public async Task<ActionResult<UserResultDto>> AddUserResult(
         CreateUserResultDto dto)
     {
@@ -130,7 +176,7 @@ public class UserResultController : ControllerBase
     }
 
     // PUT: api/UserResult/5
-    [HttpPut("{id:long}")]
+    [HttpPut("{id:long}", Name = "UpdateUserResult")]
     public async Task<IActionResult> UpdateUserResult(
         long id,
         CreateUserResultDto dto)
@@ -175,7 +221,7 @@ public class UserResultController : ControllerBase
     }
 
     // DELETE: api/UserResult/5
-    [HttpDelete("{id:long}")]
+    [HttpDelete("{id:long}", Name = "RemoveUserResult")]
     public async Task<IActionResult> DeleteUserResult(long id)
     {
         var userResult = await _context.UserResults.FindAsync(id);
@@ -190,4 +236,27 @@ public class UserResultController : ControllerBase
 
         return NoContent();
     }
+
+        static IEnumerable<LinkDto> CreateLinksForSingleUserResult(long userReultId, LinkGenerator linkGenerator, HttpContext httpContext)
+{
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "GetGame", new {id = userReultId}), "self", "GET");
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "UpdateGame", new {id = userReultId}), "edit", "PUT");
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "RemoveGame", new {id = userReultId}), "remove", "DELETE");
+
+}
+static IEnumerable<LinkDto> CreateLinksForUserResults(LinkGenerator linkGenerator, HttpContext httpContext, string? previousPageLink, string? nextPageLink)
+{
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "GetGames"), "self", "GET");
+    
+    if (previousPageLink != null)
+        {
+            yield return new LinkDto(previousPageLink, "previousPage", "GET");
+        }
+    if (nextPageLink != null)
+        {
+            yield return new LinkDto(nextPageLink, "nextPage", "GET");
+
+        }
+
+}
 }

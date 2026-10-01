@@ -18,9 +18,33 @@ public class GameController : ControllerBase
 
     // GET: api/games
     [HttpGet(Name = "GetGames")]
-    public async Task<ActionResult<IEnumerable<GameDto>>> GetSessions([FromQuery]PageParameters pageParameters, LinkGenerator linkGenerator)
+    public async Task<ActionResult<IEnumerable<GameDto>>> GetGames(
+     [FromQuery]PageParameters pageParameters,
+     [FromQuery] GameFilterParameters filter,
+     LinkGenerator linkGenerator)
     {
-        var games = _context.Games
+
+        var games = _context.Games.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(filter.Name))
+        {
+        games = games.Where(s =>
+            s.Name == filter.Name);
+        }
+        if (filter.MinPlayers.HasValue)
+    {
+        games = games.Where(s =>
+            s.PlayerCount >= filter.MinPlayers.Value);
+    }
+
+    if (filter.MaxPlayers.HasValue)
+    {
+        games = games.Where(s =>
+            s.PlayerCount <= filter.MaxPlayers.Value);
+    }
+
+  
+
+    var gamesDtos = games
     .Select(u => new GameDto
     {
         Id = u.Id,
@@ -33,17 +57,56 @@ public class GameController : ControllerBase
     })
     .OrderBy(u => u.Name);
 
-        var pagedSessions = await PagedList<GameDto>.CreateAsync(games, pageParameters.PageNumber!.Value, pageParameters.PageSize!.Value);
+        var pagedGames = await PagedList<GameDto>.CreateAsync(
+            gamesDtos,
+            pageParameters.PageNumber!.Value, 
+            pageParameters.PageSize!.Value);
 
-        var paginationMetadata = pagedSessions.CreatePaginationMetadata(linkGenerator, HttpContext, "GetSessions");
+        var resources = pagedGames.Select(game =>
+        {
+            var links = CreateLinksForSingleGame(
+                game.Id,
+                linkGenerator,
+                HttpContext
+            ).ToArray();
 
-        HttpContext.Response.Headers.Append("Pagination", JsonSerializer.Serialize(paginationMetadata));
+            return new ResourceDto<GameDto>(
+                game,
+                links);
+        }).ToList();
 
-        return Ok(pagedSessions);
+        var links = CreateLinksForGames(
+            linkGenerator,
+            HttpContext,
+            pagedGames.GetPreviousPageLink(
+                linkGenerator,
+                HttpContext,
+                "GetGames"),
+            pagedGames.GetNextPageLink(
+                linkGenerator,
+                HttpContext,
+                "GetGames")
+        ).ToArray();
+            
+
+        var paginationMetadata = pagedGames.CreatePaginationMetadata(
+        linkGenerator,
+        HttpContext,
+        "GetGames");
+
+        HttpContext.Response.Headers.Append(
+            "Pagination", 
+            JsonSerializer.Serialize(paginationMetadata));
+
+        return Ok(new
+        {
+            resources,
+            links
+        });
     }
 
     // GET: api/Games/5
-    [HttpGet("{id:long}")]
+    [HttpGet("{id:long}", Name = "GetGame")]
     public async Task<ActionResult<GameDto>> GetGame(long id)
     {
         var game = await _context.Games.FindAsync(id);
@@ -57,8 +120,8 @@ public class GameController : ControllerBase
     }
 
     // POST: api/Games
-    [HttpPost]
-    public async Task<ActionResult<GameDto>> AddGame(CreateGameDto dto)
+    [HttpPost(Name = "CreateGames")]
+    public async Task<ActionResult<GameDto>> CreateGame(CreateGameDto dto)
     {
         var session = await _context.Sessions.FindAsync(dto.SessionId);
 
@@ -91,7 +154,7 @@ public class GameController : ControllerBase
     }
 
     // PUT: api/Games/5
-    [HttpPut("{id:long}")]
+    [HttpPut("{id:long}", Name = "UpdateGame")]
     public async Task<IActionResult> UpdateGame(long id, CreateGameDto dto)
     {
 
@@ -120,7 +183,7 @@ public class GameController : ControllerBase
     }
 
     // DELETE: api/Games/5
-    [HttpDelete("{id:long}")]
+    [HttpDelete("{id:long}", Name = "RemoveGame")]
     public async Task<IActionResult> DeleteGame(long id)
     {
         var Game = await _context.Games.FindAsync(id);
@@ -135,4 +198,26 @@ public class GameController : ControllerBase
 
         return NoContent();
     }
+    static IEnumerable<LinkDto> CreateLinksForSingleGame(long gameId, LinkGenerator linkGenerator, HttpContext httpContext)
+{
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "GetGame", new {id = gameId}), "self", "GET");
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "UpdateGame", new {id = gameId}), "edit", "PUT");
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "RemoveGame", new {id = gameId}), "remove", "DELETE");
+
+}
+static IEnumerable<LinkDto> CreateLinksForGames(LinkGenerator linkGenerator, HttpContext httpContext, string? previousPageLink, string? nextPageLink)
+{
+    yield return new LinkDto(linkGenerator.GetUriByName(httpContext, "GetGames"), "self", "GET");
+    
+    if (previousPageLink != null)
+        {
+            yield return new LinkDto(previousPageLink, "previousPage", "GET");
+        }
+    if (nextPageLink != null)
+        {
+            yield return new LinkDto(nextPageLink, "nextPage", "GET");
+
+        }
+
+}
 }
