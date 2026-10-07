@@ -1,156 +1,77 @@
 using System.Text.Json;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Saitynai.DTO;
-using Saitynai.Models;
+using Saitynai.Services;
 
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly UserService _service;
+    private readonly IValidator<CreateUserDto> _validator;
 
-    public UsersController(AppDbContext context)
+    public UsersController(UserService service, IValidator<CreateUserDto> validator)
     {
-        _context = context;
+        _service = service;
+        _validator = validator;
     }
 
-
+    // GET: api/users
     [HttpGet(Name = "GetUsers")]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers([FromQuery]PageParameters pageParameters, LinkGenerator linkGenerator)
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers(
+        [FromQuery] PageParameters pageParameters,
+        LinkGenerator linkGenerator)
     {
-        var users = _context.Users
-    .Select(u => new UserDto
-    {
-        Id = u.Id,
-        Name = u.Name,
-        Surname = u.Surname,
-        Bio = u.Bio,
-        Email = u.Email,
-        BirthDate = u.BirthDate
-    })
-    .OrderBy(u => u.Name);
+        var pagedUsers = await _service.GetAllAsync(pageParameters);
 
-        var pagedUsers = await PagedList<UserDto>.CreateAsync(users, pageParameters.PageNumber!.Value, pageParameters.PageSize!.Value);
+        var paginationMetadata = pagedUsers.CreatePaginationMetadata(
+            linkGenerator, HttpContext, "GetUsers");
 
-        var paginationMetadata = pagedUsers.CreatePaginationMetadata(linkGenerator, HttpContext, "GetUsers");
-
-        HttpContext.Response.Headers.Append("Pagination", JsonSerializer.Serialize(paginationMetadata));
+        Response.Headers.Append("Pagination", JsonSerializer.Serialize(paginationMetadata));
 
         return Ok(pagedUsers);
     }
-
 
     // GET: api/users/5
     [HttpGet("{id:long}")]
     public async Task<ActionResult<UserDto>> GetUser(long id)
     {
-        var user = await _context.Users.FindAsync(id);
-
-        if (user == null)
-        {
-            return NotFound();
-        }
-
-        var userDto = new UserDto
-    {
-        Id = user.Id,
-        Name = user.Name,
-        Surname = user.Surname,
-        Bio = user.Bio,
-        Email = user.Email,
-        BirthDate = user.BirthDate
-    };
-
-        return Ok(userDto);
+        var user = await _service.GetByIdAsync(id);
+        return user == null ? NotFound() : Ok(user);
     }
 
     // POST: api/users
-[HttpPost]
-public async Task<ActionResult<UserDto>> AddUser(CreateUserDto dto)
-{
-    var user = new User
+    [HttpPost]
+    public async Task<ActionResult<UserDto>> AddUser(CreateUserDto dto)
     {
-        Name = dto.Name,
-        Surname = dto.Surname,
-        Bio = dto.Bio,
-        Email = dto.Email,
-        BirthDate = dto.BirthDate
-    };
+        var validation = await _validator.ValidateAsync(dto);
+        if (!validation.IsValid)
+            return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
 
-    try
-    {
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        var created = await _service.CreateAsync(dto);
 
-        var userDto = new UserDto
-        {
-            Id = user.Id,
-            Name = user.Name,
-            Surname = user.Surname,
-            Bio = user.Bio,
-            Email = user.Email,
-            BirthDate = user.BirthDate
-        };
+        if (created == null)
+            return BadRequest(new { message = "Unable to create the user." });
 
-        return CreatedAtAction(
-            nameof(GetUser),
-            new { id = user.Id },
-            userDto
-        );
+        return CreatedAtAction(nameof(GetUser), new { id = created.Id }, created);
     }
-    catch (DbUpdateException)
-    {
-        return BadRequest(new
-        {
-            message = "Unable to create the user."
-        });
-    }
-    catch
-    {
-        return StatusCode(503, new
-        {
-            message = "Unable to access the database."
-        });
-    }
-}
 
     // PUT: api/users/5
-[HttpPut("{id:long}")]
-public async Task<IActionResult> UpdateUser(long id, CreateUserDto dto)
-{
-    var existingUser = await _context.Users.FindAsync(id);
-
-    if (existingUser == null)
+    [HttpPut("{id:long}")]
+    public async Task<IActionResult> UpdateUser(long id, CreateUserDto dto)
     {
-        return NotFound();
+        var validation = await _validator.ValidateAsync(dto);
+        if (!validation.IsValid)
+            return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
+
+        return await _service.UpdateAsync(id, dto) ? NoContent() : NotFound();
     }
-
-    existingUser.Name = dto.Name;
-    existingUser.Surname = dto.Surname;
-    existingUser.Bio = dto.Bio;
-    existingUser.Email = dto.Email;
-    existingUser.BirthDate = dto.BirthDate;
-
-    await _context.SaveChangesAsync();
-
-    return NoContent();
-}
 
     // DELETE: api/users/5
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> DeleteUser(long id)
     {
-        var user = await _context.Users.FindAsync(id);
-
-        if (user == null)
-        {
-            return NotFound();
-        }
-
-        _context.Users.Remove(user);
-        await _context.SaveChangesAsync();
-
-        return NoContent();
+        return await _service.DeleteAsync(id) ? NoContent() : NotFound();
     }
 }
