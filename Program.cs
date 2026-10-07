@@ -1,4 +1,6 @@
 ﻿using FluentValidation;
+using Saitynai.Services;
+
 using Saitynai.DTO;
 using SharpGrip.FluentValidation.AutoValidation.Endpoints.Extensions;
 
@@ -11,6 +13,13 @@ builder.Services.AddDbContext<AppDbContext>();
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddScoped<SessionService>();
+builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<UserResultService>();
+builder.Services.AddScoped<UserService>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 //builder.Services.AddFluentValidationAutoValidation();
 //builder.Services.AddValidatorsFromAssemblyContaining<CreateSessionDto.CreateSessionDtoValidator>();

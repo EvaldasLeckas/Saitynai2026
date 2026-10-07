@@ -7,9 +7,8 @@ public class SessionDto
     public required DateTime EndDate { get; set; }
     public required int PlayerCount { get; set; }
     public required string City { get; set; }
-    public required string Adress { get; set; }
+    public required string Address { get; set; }
     public string? Description { get; set; }
-    public required long UserId { get; set; }
 }
 public class CreateSessionDto
 {
@@ -17,9 +16,8 @@ public class CreateSessionDto
     public required DateTime EndDate { get; set; }
     public required int PlayerCount { get; set; }
     public required string City { get; set; }
-    public required string Adress { get; set; }
+    public required string Address { get; set; }
     public string? Description { get; set; }
-    public required long UserId { get; set; }
 }
 
 public class SessionFilterParameters
