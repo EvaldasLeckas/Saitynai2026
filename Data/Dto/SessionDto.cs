@@ -19,7 +19,6 @@ public class CreateSessionDto
     public required string Address { get; set; }
     public string? Description { get; set; }
 }
-
 public class SessionFilterParameters
 {
     public string? City { get; set; }
