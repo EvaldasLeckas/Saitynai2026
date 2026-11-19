@@ -1,0 +1,1042 @@
+openapi: 3.0.3
+
+info:
+  title: Saitynai API
+  description: |
+    REST API žaidimų sesijų valdymui: naudotojai, sesijos, sesijų dalyviai, žaidimai ir žaidimų rezultatai.
+
+    **Autentifikacija:** JWT (Bearer). Antraštė: `Authorization: Bearer <token>`.
+    Prisijungimo eiga: `POST /api/login` grąžina `accessToken` (JSON) ir nustato `RefreshToken` slapuką (HttpOnly).
+    Kai `accessToken` pasibaigia, `POST /api/accessToken` pagal slapuką išduoda naują.
+
+    **Rolės:** `Admin`, `LobbyOwner` (priskiriama automatiškai, kai naudotojas sukuria sesiją).
+
+    **Puslapiavimas:** sąrašų endpoint'ai grąžina antraštę `Pagination` (JSON su puslapiavimo metaduomenimis).
+
+    **HATEOAS:** Session, Game ir UserResult sąrašai grąžina `resources` (kiekvienas su `links`) ir `links` (self / previousPage / nextPage).
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5000
+    description: Vietinis serveris (pakeiskite į savo)
+
+tags:
+  - name: Auth
+    description: Registracija, prisijungimas, tokenų atnaujinimas ir atsijungimas
+  - name: Users
+    description: Naudotojų valdymas ir avatarai
+  - name: Sessions
+    description: Žaidimų sesijos
+  - name: Session participants
+    description: Sesijų dalyviai
+  - name: Games
+    description: Žaidimai sesijose
+  - name: User results
+    description: Naudotojų žaidimų rezultatai
+
+paths:
+  # ===================== AUTH =====================
+  /api/register:
+    post:
+      tags: [Auth]
+      summary: Užregistruoti naują naudotoją
+      description: Naujam naudotojui priskiriama `AppUser` rolė.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterUserDto' }
+            example:
+              name: Jonas
+              lastName: Jonaitis
+              email: jonas@example.com
+              password: Slaptazodis123!
+              birthDate: '2000-05-17'
+      responses:
+        '201': { description: 'Naudotojas sukurtas (atsakymo turinio nėra)' }
+        '422':
+          description: |
+            Nepavyko užregistruoti: el. paštas jau užimtas arba slaptažodis / duomenys neatitinka
+            reikalavimų (tokiu atveju atsakymo turinio nėra).
+          content:
+            application/json:
+              schema: { type: string }
+              example: User is already registered by that email
+
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: Prisijungti
+      description: |
+        Grąžina trumpai galiojantį `accessToken`. Kartu nustatomas `RefreshToken` slapukas
+        (HttpOnly, Secure, SameSite=Lax, galioja 1 dieną).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginUserDto' }
+            example:
+              email: jonas@example.com
+              password: Slaptazodis123!
+      responses:
+        '200':
+          description: Prisijungta sėkmingai
+          headers:
+            Set-Cookie:
+              description: RefreshToken slapukas (HttpOnly, Secure)
+              schema: { type: string }
+              example: RefreshToken=eyJhbGciOi...; expires=Fri, 20 Nov 2026 10:00:00 GMT; secure; samesite=lax; httponly
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessfulLoginDto' }
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '422':
+          description: Naudotojas neegzistuoja arba neteisingas slaptažodis
+          content:
+            application/json:
+              schema: { type: string }
+              examples:
+                noUser: { value: User does not exist }
+                badPassword: { value: Username or password was incorrect }
+
+  /api/accessToken:
+    post:
+      tags: [Auth]
+      summary: Gauti naują access token (pagal RefreshToken slapuką)
+      description: |
+        Užklausos kūno nėra, naudojamas `RefreshToken` slapukas. Sėkmės atveju išduodamas
+        naujas `accessToken` ir atnaujinamas `RefreshToken` slapukas.
+      security: [{ refreshCookie: [] }]
+      responses:
+        '200':
+          description: Išduotas naujas access token
+          headers:
+            Set-Cookie:
+              description: Atnaujintas RefreshToken slapukas
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessfulLoginDto' }
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '422':
+          description: Slapuko nėra, refresh token netinkamas, sesija nebegalioja arba naudotojas nerastas
+
+  /api/logout:
+    post:
+      tags: [Auth]
+      summary: Atsijungti
+      description: Pagal `RefreshToken` slapuką nutraukia sesiją ir ištrina slapuką.
+      security: [{ refreshCookie: [] }]
+      responses:
+        '200': { description: 'Atsijungta: sesija nutraukta, slapukas ištrintas' }
+        '422': { description: 'Slapuko nėra arba refresh token netinkamas' }
+  # ===================== USERS =====================
+  /api/users:
+    get:
+      tags: [Users]
+      summary: Gauti naudotojų sąrašą (tik Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Naudotojų sąrašas
+          headers:
+            Pagination: { $ref: '#/components/headers/Pagination' }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserDto' }
+              example:
+                - id: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c
+                  name: Jonas
+                  surname: Jonaitis
+                  email: jonas@example.com
+                  avatarUrl: /avatars/9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d.png
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserIdPath'
+    get:
+      tags: [Users]
+      summary: Gauti naudotoją pagal ID (savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Naudotojas rastas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserDto' }
+              example:
+                id: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c
+                name: Jonas
+                surname: Jonaitis
+                email: jonas@example.com
+                avatarUrl: /avatars/9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d.png
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Users]
+      summary: Atnaujinti naudotoją (savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserDto' }
+            example:
+              name: Jonas
+              surname: Petraitis
+              email: jonas@example.com
+      responses:
+        '204': { description: Naudotojas atnaujintas }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Users]
+      summary: Ištrinti naudotoją (savininkas arba Admin)
+      description: Kartu ištrinamas ir naudotojo avataro failas.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Naudotojas ištrintas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/users/{id}/profile:
+    get:
+      tags: [Users]
+      summary: Gauti naudotojo profilį (savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: Naudotojo profilis
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProfileDto' }
+              example:
+                id: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c
+                name: Jonas
+                surname: Jonaitis
+                avatarUrl: /avatars/9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d.png
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/users/me/profile:
+    get:
+      tags: [Users]
+      summary: Gauti prisijungusio naudotojo profilį
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Prisijungusio naudotojo profilis
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProfileDto' }
+              example:
+                id: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c
+                name: Jonas
+                surname: Jonaitis
+                avatarUrl: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/users/{id}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/UserIdPath'
+    post:
+      tags: [Users]
+      summary: Įkelti avatarą (savininkas arba Admin)
+      description: |
+        Leidžiami tik JPEG, PNG ir WebP (tipas nustatomas pagal failo turinį, o ne pagal plėtinį).
+        Maksimalus failo dydis – 2 MB (visos užklausos riba – 3 MB). Senas avataras ištrinamas.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Avataras įkeltas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  avatarUrl: { type: string }
+              example:
+                avatarUrl: /avatars/9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d.png
+        '400':
+          description: Failas nepateiktas, per didelis arba netinkamo tipo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              examples:
+                noFile: { value: { message: No file uploaded. } }
+                tooBig: { value: { message: Image must be 2 MB or smaller. } }
+                wrongType: { value: { message: 'Only JPEG, PNG or WebP images are allowed.' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { description: Užklausa viršija 3 MB ribą }
+        '500':
+          description: Nepavyko išsaugoti avataro
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+    delete:
+      tags: [Users]
+      summary: Ištrinti avatarą (savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Avataras ištrintas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ===================== SESSIONS =====================
+  /api/session:
+    get:
+      tags: [Sessions]
+      summary: Gauti sesijų sąrašą
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: createdByUserId
+          in: query
+          description: Filtruoti pagal sesijos kūrėją. Kiti filtrai priklauso nuo SessionFilterParameters.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Sesijų sąrašas su HATEOAS nuorodomis
+          headers:
+            Pagination: { $ref: '#/components/headers/Pagination' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionList' }
+              example:
+                resources:
+                  - resource: { id: 5, title: Penktadienio vakaras, playerCount: 4, createdByUserId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c }
+                    links:
+                      - { href: 'http://localhost:5000/api/session/5', rel: self, method: GET }
+                      - { href: 'http://localhost:5000/api/session/5', rel: edit, method: PUT }
+                      - { href: 'http://localhost:5000/api/session/5', rel: remove, method: DELETE }
+                links:
+                  - { href: 'http://localhost:5000/api/session', rel: self, method: GET }
+                  - { href: 'http://localhost:5000/api/session?PageNumber=2', rel: nextPage, method: GET }
+    post:
+      tags: [Sessions]
+      summary: Sukurti sesiją
+      description: Sukūrėjui automatiškai priskiriama `LobbyOwner` rolė.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSessionDto' }
+            example: { title: Penktadienio vakaras, playerCount: 4 }
+      responses:
+        '201':
+          description: Sesija sukurta
+          headers:
+            Location: { schema: { type: string }, description: Naujos sesijos URL }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDto' }
+              example: { id: 5, title: Penktadienio vakaras, playerCount: 4, createdByUserId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c }
+        '400':
+          description: Validacijos klaida arba nepavyko sukurti sesijos
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ValidationProblemDetails' }
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Unable to create the session. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500':
+          description: Sesija sukurta, bet nepavyko priskirti rolės
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  /api/session/my:
+    get:
+      tags: [Sessions]
+      summary: Gauti prisijungusio naudotojo sukurtas sesijas
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Naudotojo sesijų sąrašas
+          headers:
+            Pagination: { $ref: '#/components/headers/Pagination' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/session/{id}:
+    parameters:
+      - $ref: '#/components/parameters/LongIdPath'
+    get:
+      tags: [Sessions]
+      summary: Gauti sesiją pagal ID
+      responses:
+        '200':
+          description: Sesija rasta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDto' }
+              example: { id: 5, title: Penktadienio vakaras, playerCount: 4, createdByUserId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Sessions]
+      summary: Atnaujinti sesiją (savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSessionDto' }
+            example: { title: Šeštadienio vakaras, playerCount: 6 }
+      responses:
+        '200':
+          description: Sesija atnaujinta (grąžinami išsaugoti duomenys)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateSessionDto' }
+              example: { title: Šeštadienio vakaras, playerCount: 6 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Sessions]
+      summary: Ištrinti sesiją (savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Sesija ištrinta }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/session/{id}/game/{gameId}/results:
+    get:
+      tags: [Sessions]
+      summary: Gauti žaidimo rezultatus konkrečioje sesijoje
+      parameters:
+        - $ref: '#/components/parameters/LongIdPath'
+        - name: gameId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+          example: 12
+      responses:
+        '200':
+          description: Žaidimo rezultatų sąrašas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserResultDto' }
+              example:
+                - { id: 1, gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 120 }
+        '404':
+          description: Žaidimas nerastas nurodytoje sesijoje
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Game was not found in the specified session. }
+
+  # ===================== SESSION PARTICIPANTS =====================
+  /api/session-participants:
+    get:
+      tags: [Session participants]
+      summary: Gauti visus sesijų dalyvius
+      responses:
+        '200':
+          description: Visų dalyvių sąrašas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SessionParticipantDto' }
+              example:
+                - { sessionId: 5, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c }
+
+  /api/session-participants/session/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionIdPath'
+    get:
+      tags: [Session participants]
+      summary: Gauti sesijos dalyvius
+      responses:
+        '200':
+          description: Sesijos dalyvių sąrašas su vardais
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SessionParticipantDto' }
+              example:
+                - { sessionId: 5, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, name: Jonas, lastName: Jonaitis }
+        '404': { $ref: '#/components/responses/SessionNotFound' }
+    post:
+      tags: [Session participants]
+      summary: Pridėti dalyvį (sesijos savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSessionParticipantDto' }
+            example: { userId: 8a7b6c5d-1111-2222-3333-444455556666 }
+      responses:
+        '200':
+          description: Dalyvis pridėtas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionParticipantDto' }
+              example: { sessionId: 5, userId: 8a7b6c5d-1111-2222-3333-444455556666 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Sesija arba naudotojas nerastas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              examples:
+                session: { value: { message: Session not found. } }
+                user: { value: { message: User not found. } }
+        '409':
+          description: Naudotojas jau dalyvauja arba sesija pilna
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              examples:
+                already: { value: { message: User is already a participant of this session. } }
+                full: { value: { message: This session is full. } }
+
+  /api/session-participants/session/{sessionId}/join:
+    post:
+      tags: [Session participants]
+      summary: Prisijungti prie sesijos (prisijungęs naudotojas)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+      responses:
+        '204': { description: Sėkmingai prisijungta }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/SessionNotFound' }
+        '409':
+          description: Jau prisijungta arba sesija pilna
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              examples:
+                already: { value: { message: You already joined this session. } }
+                full: { value: { message: This session is full. } }
+
+  /api/session-participants/session/{sessionId}/leave:
+    delete:
+      tags: [Session participants]
+      summary: Palikti sesiją (prisijungęs naudotojas)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+      responses:
+        '204': { description: Sesija palikta }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: Sesija nerasta arba naudotojas joje nedalyvauja
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              examples:
+                session: { value: { message: Session not found. } }
+                notIn: { value: { message: You are not in this session. } }
+        '409':
+          description: Savininkas negali palikti savo sesijos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: "The owner can't leave. Delete the session instead." }
+
+  /api/session-participants/session/{sessionId}/user/{userId}:
+    delete:
+      tags: [Session participants]
+      summary: Pašalinti dalyvį (sesijos savininkas arba Admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionIdPath'
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+          example: 8a7b6c5d-1111-2222-3333-444455556666
+      responses:
+        '204': { description: Dalyvis pašalintas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ===================== GAMES =====================
+  /api/game:
+    get:
+      tags: [Games]
+      summary: Gauti žaidimų sąrašą
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Žaidimų sąrašas su HATEOAS nuorodomis
+          headers:
+            Pagination: { $ref: '#/components/headers/Pagination' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameList' }
+              example:
+                resources:
+                  - resource: { id: 12, name: Catan, sessionId: 5 }
+                    links:
+                      - { href: 'http://localhost:5000/api/game/12', rel: self, method: GET }
+                      - { href: 'http://localhost:5000/api/game/12', rel: edit, method: PUT }
+                      - { href: 'http://localhost:5000/api/game/12', rel: remove, method: DELETE }
+                links:
+                  - { href: 'http://localhost:5000/api/game', rel: self, method: GET }
+    post:
+      tags: [Games]
+      summary: Sukurti žaidimą (Admin arba LobbyOwner; turi būti sesijos savininkas)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGameDto' }
+            example: { name: Catan, sessionId: 5 }
+      responses:
+        '201':
+          description: Žaidimas sukurtas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameDto' }
+              example: { id: 12, name: Catan, sessionId: 5 }
+        '400':
+          description: Validacijos klaida arba nepavyko sukurti žaidimo
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ValidationProblemDetails' }
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+              example: { message: Unable to create game }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/game/{id}:
+    parameters:
+      - $ref: '#/components/parameters/LongIdPath'
+    get:
+      tags: [Games]
+      summary: Gauti žaidimą pagal ID
+      responses:
+        '200':
+          description: Žaidimas rastas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameDto' }
+              example: { id: 12, name: Catan, sessionId: 5 }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Games]
+      summary: Atnaujinti žaidimą (Admin arba LobbyOwner; turi būti ir dabartinės, ir naujos sesijos savininkas)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGameDto' }
+            example: { name: Carcassonne, sessionId: 5 }
+      responses:
+        '204': { description: Žaidimas atnaujintas }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Games]
+      summary: Ištrinti žaidimą (Admin arba LobbyOwner; turi būti sesijos savininkas)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Žaidimas ištrintas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ===================== USER RESULTS =====================
+  /api/userresult:
+    get:
+      tags: [User results]
+      summary: Gauti rezultatų sąrašą
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Rezultatų sąrašas su HATEOAS nuorodomis
+          headers:
+            Pagination: { $ref: '#/components/headers/Pagination' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResultList' }
+              example:
+                resources:
+                  - resource: { id: 1, gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 120 }
+                    links:
+                      - { href: 'http://localhost:5000/api/userresult/1', rel: self, method: GET }
+                      - { href: 'http://localhost:5000/api/userresult/1', rel: edit, method: PUT }
+                      - { href: 'http://localhost:5000/api/userresult/1', rel: remove, method: DELETE }
+                links:
+                  - { href: 'http://localhost:5000/api/userresult', rel: self, method: GET }
+    post:
+      tags: [User results]
+      summary: Pridėti rezultatą (Admin arba LobbyOwner; turi būti žaidimo sesijos savininkas)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserResultDto' }
+            example: { gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 120 }
+      responses:
+        '201':
+          description: Rezultatas sukurtas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResultDto' }
+              example: { id: 1, gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 120 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/userresult/{id}:
+    parameters:
+      - $ref: '#/components/parameters/LongIdPath'
+    get:
+      tags: [User results]
+      summary: Gauti rezultatą pagal ID
+      responses:
+        '200':
+          description: Rezultatas rastas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResultDto' }
+              example: { id: 1, gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 120 }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [User results]
+      summary: Atnaujinti rezultatą (Admin arba LobbyOwner; turi būti dabartinio ir naujo žaidimo savininkas)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserResultDto' }
+            example: { gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 150 }
+      responses:
+        '200':
+          description: Rezultatas atnaujintas (grąžinami išsaugoti duomenys)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateUserResultDto' }
+              example: { gameId: 12, userId: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c, score: 150 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [User results]
+      summary: Ištrinti rezultatą (Admin arba LobbyOwner; turi būti žaidimo savininkas)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Rezultatas ištrintas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: RefreshToken
+      description: HttpOnly slapukas, nustatomas prisijungimo metu
+
+  parameters:
+    PageNumber:
+      name: PageNumber
+      in: query
+      description: Puslapio numeris
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: PageSize
+      in: query
+      description: Įrašų skaičius puslapyje
+      schema: { type: integer, minimum: 1, default: 10 }
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      description: Naudotojo ID (GUID tekstas)
+      schema: { type: string }
+      example: 3f1c2a9e-7b1d-4e55-9a0c-1d2e3f4a5b6c
+    LongIdPath:
+      name: id
+      in: path
+      required: true
+      description: Resurso ID
+      schema: { type: integer, format: int64 }
+      example: 5
+    SessionIdPath:
+      name: sessionId
+      in: path
+      required: true
+      description: Sesijos ID
+      schema: { type: integer, format: int64 }
+      example: 5
+
+  headers:
+    Pagination:
+      description: Puslapiavimo metaduomenys (JSON tekstas)
+      schema: { type: string }
+      example: '{"totalCount":25,"pageSize":10,"currentPage":1,"totalPages":3,"previousPageLink":null,"nextPageLink":"http://localhost:5000/api/session?PageNumber=2"}'
+
+  responses:
+    Unauthorized:
+      description: Naudotojas neprisijungęs arba netinkamas tokenas
+    Forbidden:
+      description: Nepakanka teisių (ne resurso savininkas ir ne Admin)
+    NotFound:
+      description: Resursas nerastas
+    SessionNotFound:
+      description: Sesija nerasta
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+          example: { message: Session not found. }
+    ValidationError:
+      description: Validacijos klaida
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblemDetails' }
+          example:
+            type: https://tools.ietf.org/html/rfc9110#section-15.5.1
+            title: One or more validation errors occurred.
+            status: 400
+            errors:
+              Name: [ "'Name' must not be empty." ]
+
+  schemas:
+    Message:
+      type: object
+      properties:
+        message: { type: string }
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items: { type: string }
+    Link:
+      type: object
+      properties:
+        href: { type: string }
+        rel: { type: string, example: self }
+        method: { type: string, example: GET }
+
+    # --- Auth ---
+    RegisterUserDto:
+      type: object
+      required: [name, lastName, email, password, birthDate]
+      properties:
+        name: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+        birthDate: { type: string, format: date, example: '2000-05-17' }
+    LoginUserDto:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    SuccessfulLoginDto:
+      type: object
+      properties:
+        accessToken: { type: string }
+
+    # --- Users ---
+    UserDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
+        avatarUrl: { type: string, nullable: true }
+    CreateUserDto:
+      type: object
+      required: [name, surname]
+      properties:
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
+    UserProfileDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        surname: { type: string }
+        avatarUrl: { type: string, nullable: true }
+
+    # --- Sessions ---
+    SessionDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        title: { type: string }
+        playerCount: { type: integer }
+        createdByUserId: { type: string }
+    CreateSessionDto:
+      type: object
+      required: [title, playerCount]
+      properties:
+        title: { type: string }
+        playerCount: { type: integer, minimum: 1 }
+    SessionList:
+      type: object
+      properties:
+        resources:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { $ref: '#/components/schemas/SessionDto' }
+              links:
+                type: array
+                items: { $ref: '#/components/schemas/Link' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/Link' }
+
+    # --- Session participants ---
+    SessionParticipantDto:
+      type: object
+      properties:
+        sessionId: { type: integer, format: int64 }
+        userId: { type: string }
+        name: { type: string, description: 'Grąžinama tik užklausoje pagal sesiją' }
+        lastName: { type: string, description: 'Grąžinama tik užklausoje pagal sesiją' }
+    CreateSessionParticipantDto:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+
+    # --- Games ---
+    GameDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        sessionId: { type: integer, format: int64 }
+    CreateGameDto:
+      type: object
+      required: [name, sessionId]
+      properties:
+        name: { type: string }
+        sessionId: { type: integer, format: int64 }
+    GameList:
+      type: object
+      properties:
+        resources:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { $ref: '#/components/schemas/GameDto' }
+              links:
+                type: array
+                items: { $ref: '#/components/schemas/Link' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/Link' }
+
+    # --- User results ---
+    UserResultDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        gameId: { type: integer, format: int64 }
+        userId: { type: string }
+        score: { type: integer }
+    CreateUserResultDto:
+      type: object
+      required: [gameId, userId, score]
+      properties:
+        gameId: { type: integer, format: int64 }
+        userId: { type: string }
+        score: { type: integer }
+    UserResultList:
+      type: object
+      properties:
+        resources:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { $ref: '#/components/schemas/UserResultDto' }
+              links:
+                type: array
+                items: { $ref: '#/components/schemas/Link' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/Link' }

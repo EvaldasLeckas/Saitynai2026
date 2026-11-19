@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using Saitynai.Auth;
+
 namespace Saitynai.Models;
 
 public class SessionParticipant
@@ -8,7 +11,8 @@ public class SessionParticipant
 
     public Session Session { get; set; }
 
-    public long UserId { get; set; }
+    [Required]
+    public required string UserId { get; set; }
 
-    public User User { get; set; }
+    public AppUser User { get; set; }
 }

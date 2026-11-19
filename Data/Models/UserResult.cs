@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using Saitynai.Auth;
+
 namespace Saitynai.Models;
 
 public class UserResult
@@ -14,7 +17,7 @@ public class UserResult
     public Game Game { get; set; }
 
     // Naudotojas, kuriam priklauso rezultatas
-    public long UserId { get; set; }
-
-    public User User { get; set; }
+    [Required]
+    public required string UserId { get; set; }
+    public AppUser User { get; set; }
 }

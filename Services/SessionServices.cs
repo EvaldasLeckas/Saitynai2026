@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Saitynai.DTO;
 using Saitynai.Models;
@@ -24,7 +25,8 @@ public class SessionService
             PlayerCount = s.PlayerCount,
             City = s.City,
             Address = s.Address,
-            Description = s.Description
+            Description = s.Description,
+            CreatedByUserId = s.CreatedByUserId
         };
 
     public async Task<PagedList<SessionDto>> GetAllAsync(
@@ -47,6 +49,9 @@ public class SessionService
 
         if (filter.StartDateTo.HasValue)
             sessions = sessions.Where(s => s.StartDate <= filter.StartDateTo.Value);
+        
+        if (!string.IsNullOrWhiteSpace(filter.CreatedByUserId))
+            sessions = sessions.Where(s => s.CreatedByUserId == filter.CreatedByUserId);
 
         var dtos = sessions.Select(ToDto).OrderBy(s => s.StartDate);
 
@@ -54,6 +59,15 @@ public class SessionService
             dtos,
             pageParameters.PageNumber!.Value,
             pageParameters.PageSize!.Value);
+    }
+
+    // SessionService
+    public async Task<string?> GetOwnerIdAsync(long id)
+    {
+        return await _context.Sessions
+            .Where(s => s.Id == id)
+            .Select(s => s.CreatedByUserId)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<SessionDto?> GetByIdAsync(long id)
@@ -65,7 +79,7 @@ public class SessionService
     }
 
     // Returns null if saving failed
-    public async Task<SessionDto?> CreateAsync(CreateSessionDto dto)
+    public async Task<SessionDto?> CreateAsync(CreateSessionDto dto, string userId)
     {
         var session = new Session
         {
@@ -74,7 +88,13 @@ public class SessionService
             Description = dto.Description,
             PlayerCount = dto.PlayerCount,
             City = dto.City,
-            Address = dto.Address
+            Address = dto.Address,
+            CreatedByUserId = userId,
+
+            Participants = new List<SessionParticipant>
+            {
+                new SessionParticipant {UserId = userId}
+            }
         };
 
         try
@@ -105,6 +125,7 @@ public class SessionService
 
         await _context.SaveChangesAsync();
         return true;
+
     }
 
     // Returns false if not found

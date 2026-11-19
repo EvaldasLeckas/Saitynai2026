@@ -5,19 +5,40 @@ using Saitynai.DTO;
 using Saitynai.Models;
 using System.Text.Json;
 using Saitynai.Services;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 [ApiController]
 [Route("api/[controller]")]
 public class GameController : ControllerBase
 {
     private readonly GameService _service;
+    private readonly SessionService _sessionService;
     private readonly IValidator<CreateGameDto> _validator;
 
 
-    public GameController(GameService service, IValidator<CreateGameDto> validator)
+    public GameController(GameService service, IValidator<CreateGameDto> validator, SessionService sessionService)
     {
         _service = service;
         _validator = validator;
+        _sessionService = sessionService;
+    }
+
+    private string? CurrentUserId =>
+    User.FindFirstValue(JwtRegisteredClaimNames.Sub)
+    ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    private ActionResult? CheckOwnership(string? ownerId)
+    {
+        var userId = CurrentUserId;
+        if (userId == null) return Unauthorized();
+        if (ownerId == null) return NotFound();
+
+        if (ownerId != userId && !User.IsInRole(AppRoles.Admin))
+            return Forbid();
+
+        return null;
     }
 
     // GET: api/Game
@@ -79,12 +100,18 @@ public class GameController : ControllerBase
 
     // POST: api/Game
     [HttpPost(Name = "CreateGame")]
+    [Authorize(Roles = "Admin, LobbyOwner")]
+
     public async Task<ActionResult<GameDto>> CreateGame(
         CreateGameDto dto)
     {
         var validation = await _validator.ValidateAsync(dto);
         if (!validation.IsValid)
             return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
+
+        var denied = CheckOwnership(await _sessionService.GetOwnerIdAsync(dto.SessionId));
+        if (denied != null) return denied;
+
         var created = await _service.CreateAsync(dto);
 
         if (created == null)
@@ -99,6 +126,8 @@ public class GameController : ControllerBase
 
     // PUT: api/Game/5
     [HttpPut("{id:long}", Name = "UpdateGame")]
+    [Authorize(Roles = "Admin, LobbyOwner")]
+
     public async Task<IActionResult> UpdateGame(
         long id,
         CreateGameDto dto)
@@ -106,6 +135,12 @@ public class GameController : ControllerBase
         var validation = await _validator.ValidateAsync(dto);
         if (!validation.IsValid)
             return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
+
+        var denied = CheckOwnership(await _service.GetOwnerIdAsync(id));
+        if (denied != null) return denied;
+
+        var targetDenied = CheckOwnership(await _sessionService.GetOwnerIdAsync(dto.SessionId));
+        if (targetDenied != null) return targetDenied;
 
         var error = await _service.UpdateAsync(id, dto);
         return error == null ? NoContent() : NotFound(new { message = error });
@@ -115,8 +150,13 @@ public class GameController : ControllerBase
 
     // DELETE: api/Game/5
     [HttpDelete("{id:long}", Name = "RemoveGame")]
+    [Authorize(Roles = "Admin, LobbyOwner")]
+
     public async Task<IActionResult> DeleteGame(long id)
     {
+        var denied = CheckOwnership(await _service.GetOwnerIdAsync(id));
+        if (denied != null) return denied;
+
         return await _service.DeleteAsync(id) ? NoContent() : NotFound();
 
     }

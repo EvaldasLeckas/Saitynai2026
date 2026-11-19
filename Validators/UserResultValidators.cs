@@ -10,6 +10,5 @@ public class CreateUserResultDtoValidator : AbstractValidator<CreateUserResultDt
         RuleFor(x => x.Score).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Placement).GreaterThan(0);
         RuleFor(x => x.GameId).GreaterThan(0);
-        RuleFor(x => x.UserId).GreaterThan(0);
     }
 }

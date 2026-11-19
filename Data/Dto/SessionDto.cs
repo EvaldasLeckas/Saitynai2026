@@ -9,6 +9,8 @@ public class SessionDto
     public required string City { get; set; }
     public required string Address { get; set; }
     public string? Description { get; set; }
+    public string CreatedByUserId { get; set; } = null!;
+
 }
 public class CreateSessionDto
 {
@@ -18,6 +20,7 @@ public class CreateSessionDto
     public required string City { get; set; }
     public required string Address { get; set; }
     public string? Description { get; set; }
+
 }
 public class SessionFilterParameters
 {
@@ -26,4 +29,5 @@ public class SessionFilterParameters
     public int? MaxPlayers { get; set; }
     public DateTime? StartDateFrom { get; set; }
     public DateTime? StartDateTo { get; set; }
+    public string? CreatedByUserId { get; set; }
 }

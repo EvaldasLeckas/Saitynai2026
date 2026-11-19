@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using Saitynai.Auth;
+
 namespace Saitynai.Models;
 
 public class Session
@@ -23,4 +26,8 @@ public class Session
     // Sesijoje vykstantys žaidimai
     public ICollection<Game> Games { get; set; }
         = new List<Game>();
+
+    [Required]
+    public required string CreatedByUserId { get; set; }
+    public AppUser CreatedByUser { get; set; } = null!;
 }
