@@ -101,6 +101,7 @@ app.UseStaticFiles();
 app.UseHttpsRedirection();
 
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 app.UseAuthentication();
 app.UseAuthorization();
 app.Run();
