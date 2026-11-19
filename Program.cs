@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+              ?? new[] { "http://localhost:5173" };
+        policy.WithOrigins(origins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -26,10 +30,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddDbContext<AppDbContext>();
 
-// Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 builder.Services.AddScoped<SessionService>();
@@ -39,14 +41,6 @@ builder.Services.AddScoped<UserService>();
 
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-//builder.Services.AddFluentValidationAutoValidation();
-//builder.Services.AddValidatorsFromAssemblyContaining<CreateSessionDto.CreateSessionDtoValidator>();
-// builder.Services.AddValidatorsFromAssemblyContaining<Program>();
-// builder.Services.AddFluentValidationAutoValidation(configuration =>
-// {
-//     //configuration.OverrideDefaultResultFactoryWith<ProblemDetailsResultFactory>();
-
-//});
 
 
 builder.Services.AddTransient<JwtTokenService>();
@@ -80,6 +74,7 @@ var app = builder.Build();
 // nes user manager ir role manager klasės sukuria kiekvieno userio gyvavimo laikotarpį iš to scope galim pasiimt db context
 using var scope = app.Services.CreateScope();
 var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+await dbContext.Database.MigrateAsync();
 var dbSeeder = scope.ServiceProvider.GetRequiredService<AuthSeeder>();
 
 await dbSeeder.SeedAsync();
@@ -90,7 +85,7 @@ app.AddAuthApi();
 
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableSwagger"))
 {
     app.MapOpenApi();
     app.UseSwaggerUi(options =>
