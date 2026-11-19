@@ -13,9 +13,9 @@ public class CreateUserDtoValidator : AbstractValidator<CreateUserDto>
         RuleFor(x => x.Bio).MaximumLength(1000);
 
         RuleFor(x => x.BirthDate)
-            .LessThan(DateTime.Today)
+            .LessThan(_ => DateOnly.FromDateTime(DateTime.Today))
             .WithMessage("BirthDate must be in the past.")
-            .GreaterThan(new DateTime(1900, 1, 1))
+            .GreaterThan(new DateOnly(1900, 1, 1))
             .WithMessage("BirthDate is not valid.");
     }
 }

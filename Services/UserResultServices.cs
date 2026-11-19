@@ -119,13 +119,25 @@ public class UserResultService
     }
 
     // Shared by create and update
+    // Shared by create and update
     private async Task<string?> CheckReferencesAsync(CreateUserResultDto dto)
     {
-        if (!await _context.Games.AnyAsync(g => g.Id == dto.GameId))
+        var game = await _context.Games
+            .Where(g => g.Id == dto.GameId)
+            .Select(g => new { g.SessionId })
+            .FirstOrDefaultAsync();
+
+        if (game == null)
             return "Game not found.";
 
         if (!await _context.Users.AnyAsync(u => u.Id == dto.UserId))
             return "User not found.";
+
+        var isParticipant = await _context.SessionParticipants
+            .AnyAsync(p => p.SessionId == game.SessionId && p.UserId == dto.UserId);
+
+        if (!isParticipant)
+            return "User is not a participant of this game's session.";
 
         return null;
     }

@@ -6,21 +6,21 @@ public class CreateUserDto
     public required string Surname { get; set; }
     public string? Bio {get; set;}
     public required string Email {get; set; }
-    public required DateTime BirthDate {get; set; }
+    public required DateOnly BirthDate {get; set; }
 }
 public class UserDto
 {
-    public long Id { get; set; }
+    public string Id { get; set; }
     public required string Name { get; set; }
     public required string Surname { get; set; }
     public string? Bio { get; set; }
     public required string Email { get; set; }
-    public required DateTime BirthDate { get; set; }
+    public required DateOnly BirthDate { get; set; }
 }
 public class UserProfileDto
 {
     // iš User
-    public long UserId { get; set; }
+    public string UserId { get; set; }
     public string FullName { get; set; } = "";
     public string Email { get; set; } = "";
     public string? Bio { get; set; }
@@ -28,12 +28,11 @@ public class UserProfileDto
     public int GamesPlayed { get; set; }
     public int Wins { get; set; }
     public double WinRate { get; set; }
-    public double? AveragePlacement { get; set; } 
-    public float? BestScore { get; set; }
+    public double? AveragePlacement { get; set; }
+    public string? AvatarUrl {get; set;}
 
-    public int SessionsJoined { get; set; }
 
-    public List<ProfileSessionDto> UpcomingSessions { get; set; } = new();
+    //public int SessionsJoined { get; set; }
     public List<ProfileResultDto> RecentResults { get; set; } = new();
 }
 

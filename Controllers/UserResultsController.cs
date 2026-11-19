@@ -1,7 +1,10 @@
 using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Saitynai.DTO;
 using Saitynai.Services;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text.Json;
 
 [ApiController]
@@ -10,13 +13,38 @@ public class UserResultController : ControllerBase
 {
     private readonly UserResultService _service;
     private readonly IValidator<CreateUserResultDto> _validator;
+    private readonly GameService _gameService;
 
     public UserResultController(
         UserResultService service,
-        IValidator<CreateUserResultDto> validator)
+        IValidator<CreateUserResultDto> validator,
+        GameService gameService)
     {
         _service = service;
         _validator = validator;
+        _gameService = gameService;
+    }
+
+        private string? CurrentUserId =>
+        User.FindFirstValue(JwtRegisteredClaimNames.Sub)
+        ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    private async Task<IActionResult?> CheckOwnershipAsync(long gameId)
+    {
+        var userId = CurrentUserId;
+
+        if (userId == null)
+            return Unauthorized();
+
+        var ownerId = await _gameService.GetOwnerIdAsync(gameId);
+
+        if (ownerId == null)
+            return NotFound();
+
+        if (ownerId != userId && !User.IsInRole(AppRoles.Admin))
+            return Forbid();
+
+        return null;
     }
 
     // GET: api/UserResult
@@ -59,12 +87,22 @@ public class UserResultController : ControllerBase
 
     // POST: api/UserResult
     [HttpPost(Name = "CreateUserResult")]
+    [Authorize(Roles = "Admin, LobbyOwner")]
+
     public async Task<ActionResult<UserResultDto>> AddUserResult(CreateUserResultDto dto)
     {
         var validation = await _validator.ValidateAsync(dto);
         if (!validation.IsValid)
             return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
 
+        
+        var denied = await CheckOwnershipAsync(dto.GameId);
+        if (denied != null)
+            return denied is UnauthorizedResult
+                ? Unauthorized()
+                : denied is NotFoundResult
+                    ? NotFound()
+                    : Forbid();
         var (result, error) = await _service.CreateAsync(dto);
 
         if (error != null)
@@ -75,36 +113,44 @@ public class UserResultController : ControllerBase
 
     // PUT: api/UserResult/5
     [HttpPut("{id:long}", Name = "UpdateUserResult")]
+    [Authorize(Roles = "Admin, LobbyOwner")]
+
+
     public async Task<IActionResult> UpdateUserResult(long id, CreateUserResultDto dto)
     {
         var validation = await _validator.ValidateAsync(dto);
         if (!validation.IsValid)
             return ValidationProblem(new ValidationProblemDetails(validation.ToDictionary()));
 
+        var existing = await _service.GetByIdAsync(id);
+        if (existing == null) return NotFound();
+
+        var denied = await CheckOwnershipAsync(existing.GameId);
+        if (denied != null) return denied;
+
+        var targetDenied = await CheckOwnershipAsync(dto.GameId); 
+        if (targetDenied != null) return targetDenied;
         var error = await _service.UpdateAsync(id, dto);
 
-        return error == null ? NoContent() : NotFound(new { message = error });
+        return error == null ? Ok(dto) : NotFound(new { message = error });
     }
 
     // DELETE: api/UserResult/5
     [HttpDelete("{id:long}", Name = "RemoveUserResult")]
+    [Authorize(Roles = "Admin, LobbyOwner")]
+
+
     public async Task<IActionResult> DeleteUserResult(long id)
     {
+
+        var existing = await _service.GetByIdAsync(id);
+        if (existing == null) return NotFound();
+
+        var denied = await CheckOwnershipAsync(existing.GameId);
+        if (denied != null) return denied;
         return await _service.DeleteAsync(id) ? NoContent() : NotFound();
     }
 
-    // GET: api/UserResult/session/1/game/2/results
-    [HttpGet("session/{sessionId:long}/game/{gameId:long}/results", Name = "GetGameResultsForSession")]
-    public async Task<ActionResult<IEnumerable<UserResultDto>>> GetGameResultsForSession(
-        long sessionId, long gameId)
-    {
-        var results = await _service.GetForGameInSessionAsync(sessionId, gameId);
-
-        if (results == null)
-            return NotFound(new { message = "Game was not found in the specified session." });
-
-        return Ok(results);
-    }
 
     // HATEOAS links
     static IEnumerable<LinkDto> CreateLinksForSingleUserResult(

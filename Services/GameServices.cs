@@ -14,6 +14,14 @@ public class GameService
         _context = context;
     }
 
+    public async Task<string?> GetOwnerIdAsync(long gameId)
+    {
+    return await _context.Games
+        .Where(g => g.Id == gameId)
+        .Select(g => g.Session.CreatedByUserId)
+        .FirstOrDefaultAsync();
+    }
+
     // Mapping Session -> SessionDto (written once, reused everywhere)
     private static readonly Expression<Func<Game, GameDto>> ToDto =
         s => new GameDto
